@@ -1,0 +1,9 @@
+[package]
+name = "syster"
+version = "0.1.0"
+authors = ["John Baublitz <john.m.baublitz@gmail.com>"]
+
+[dependencies]
+
+[dev-dependencies]
+libc = "*"
