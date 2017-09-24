@@ -5,7 +5,6 @@ authors = ["John Baublitz <john.m.baublitz@gmail.com>"]
 
 [dependencies]
 nix = "*"
-num = "*"
 
 [dev-dependencies]
 libc = "*"
