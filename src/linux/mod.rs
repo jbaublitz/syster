@@ -1,2 +1,2 @@
-mod asm;
-pub use self::asm::*;
+mod syscalls;
+pub use self::syscalls::*;

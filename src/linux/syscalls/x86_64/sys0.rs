@@ -1,29 +1,10 @@
 use nix::errno::Errno;
 
-pub enum SyscallArg<T=()> {
-    Fd(u64),
-    Id(u64),
-    Ptr(*const T),
-    MutPtr(*mut T),
-    StrPtr(*const str),
-}
-
-#[derive(Debug,PartialEq)]
-pub enum SyscallRet<T=()> {
-    Ret(i64),
-    Fd(u64),
-    Id(u64),
-    Ptr(*const T),
-    MutPtr(*mut T),
-    StrPtr(*const str),
-    Success,
-    Zero,
-    Err(Errno),
-}
+use linux::syscalls::x86_64::SyscallRet;
 
 pub trait SyscallZeroArgs {
     fn raw_call() -> i64 {
-        let val: u64 = Self::into();
+        let val: u64 = Self::numval();
         let rval: i64;
         unsafe {
             asm!("movq $0, %rax
@@ -37,16 +18,16 @@ pub trait SyscallZeroArgs {
         rval
     }
 
-    fn into() -> u64;
+    fn numval() -> u64;
     fn call() -> SyscallRet;
 }
 
 macro_rules! syscall_zero {
-    ( $name:ident => ($val:tt) $call_impl:block ) => (
+    ( $name:ident => ($val:tt) { $call_impl:expr } ) => (
         pub struct $name;
 
         impl SyscallZeroArgs for $name {
-            fn into() -> u64 {
+            fn numval() -> u64 {
                 $val
             }
 
@@ -179,72 +160,6 @@ syscall_zero!(RestartSyscall => (219) {
 });
 syscall_zero!(InotifyInit => (253) {
     SyscallRet::Fd(InotifyInit::raw_call() as u64)
-});
-
-pub trait SyscallOneArg {
-    fn raw_call<T>(arg0: T) -> i64 {
-        let val: u64 = Self::into();
-        let rval: i64;
-        unsafe {
-            asm!("movq $0, %rdi
-                  movq $1, %rax
-                  syscall"
-                 :"=A"(rval)
-                 :"r"(arg0),"r"(val)
-                 :"rax","rdi"
-                 :"volatile"
-             )
-        };
-        rval
-    }
-
-    fn into() -> u64;
-    fn call(SyscallArg) -> SyscallRet;
-}
-
-macro_rules! syscall_one {
-    ( $name:ident => ($val:tt) { $( $call_pat:pat => $call_expr:expr ),* } ) => (
-        pub struct $name;
-
-        impl SyscallOneArg for $name {
-            fn into() -> u64 {
-                $val
-            }
-
-            fn call(arg0: SyscallArg) -> SyscallRet {
-                match arg0 {
-                    $( $call_pat => $call_expr, )*
-                }
-            }
-        }
-    );
-}
-
-syscall_one!(Close => (3) {
-    SyscallArg::Fd(fd) => match Close::raw_call::<u64>(fd) {
-        i if i == 0 => SyscallRet::Success,
-        i if i < 0 => SyscallRet::Err(Errno::last()),
-        _ => panic!(),
-    },
-    _ => SyscallRet::Err(Errno::EINVAL)
-});
-syscall_one!(Brk => (12) {
-    SyscallArg::Ptr(p) => match Brk::raw_call::<*const ()>(p) {
-        i if i == 0 => SyscallRet::Success,
-        i if i < 0 => SyscallRet::Err(Errno::last()),
-        _ => panic!(),
-    },
-    _ => SyscallRet::Err(Errno::EINVAL)
-});
-//RtSigreturn => (15, Sys
-syscall_one!(Pipe => (22) {
-    SyscallArg::StrPtr(sp) => match Pipe::raw_call::<*const str>(sp) {
-        i if i > 0 => SyscallRet::Fd(i as u64),
-        i if i == 0 => SyscallRet::Zero,
-        i if i < 0 => SyscallRet::Err(Errno::last()),
-        _ => panic!(),
-    },
-    _ => SyscallRet::Err(Errno::EINVAL)
 });
 
 #[cfg(test)]
