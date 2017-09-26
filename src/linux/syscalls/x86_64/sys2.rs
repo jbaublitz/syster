@@ -5,12 +5,9 @@ pub trait SyscallTwoArgs {
         let val: u64 = Self::numval();
         let rval: i64;
         unsafe {
-            asm!("movq $0, %rax
-                  movq $1, %rdi
-                  movq $2, %rsi
-                  syscall"
+            asm!("syscall"
                  :"=A"(rval)
-                 :"r"(val),"r"(arg0),"r"(arg1)
+                 :"{rax}"(val),"{rdi}"(arg0),"{rsi}"(arg1)
                  :"rax","rdi","rsi"
                  :"volatile"
              )

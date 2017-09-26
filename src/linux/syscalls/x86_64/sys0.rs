@@ -7,10 +7,9 @@ pub trait SyscallZeroArgs {
         let val: u64 = Self::numval();
         let rval: i64;
         unsafe {
-            asm!("movq $0, %rax
-                  syscall"
+            asm!("syscall"
                  :"=A"(rval)
-                 :"r"(val)
+                 :"{rax}"(val)
                  :"rax"
                  :"volatile"
              )

@@ -7,11 +7,9 @@ pub trait SyscallOneArg {
         let val: u64 = Self::numval();
         let rval: i64;
         unsafe {
-            asm!("movq $0, %rdi
-                  movq $1, %rax
-                  syscall"
+            asm!("syscall"
                  :"=A"(rval)
-                 :"r"(arg0),"r"(val)
+                 :"{rax}"(val),"{rdi}"(arg0)
                  :"rax","rdi"
                  :"volatile"
              )
