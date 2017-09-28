@@ -18,22 +18,3 @@ pub trait SyscallTwoArgs {
     fn numval() -> u64;
     fn call(SyscallArg, SyscallArg) -> SyscallRet;
 }
-
-macro_rules! syscall_two {
-    ( $name:ident => ($val:tt) { $( $call_pat:pat => $call_expr:expr ),* },
-      { $( $call_pat:pat => $call_expr:expr ),* } ) => (
-        pub struct $name;
-
-        impl SyscallTwoArgs for $name {
-            fn numval() -> u64 {
-                $val
-            }
-
-            fn call(arg0: SyscallArg, arg1: SyscallTwoArgs) -> SyscallRet {
-                match (arg0, arg1) {
-                    $( $call_pat => $call_expr, )*
-                }
-            }
-        }
-    );
-}
