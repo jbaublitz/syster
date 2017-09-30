@@ -184,6 +184,21 @@ syscall_one!(Fdatasync => (75) {
 syscall_one!(Chdir => (80) {
     i if i == 0 => SyscallRet::Success
 });
+syscall_one!(Fchdir => (81) {
+    i if i == 0 => SyscallRet::Success
+});
+syscall_one!(Rmdir => (84) {
+    i if i == 0 => SyscallRet::Success
+});
+syscall_one!(Unlink => (87) {
+    i if i == 0 => SyscallRet::Success
+});
+syscall_one!(Umask => (95) {
+    i if i >= 0 => SyscallRet::Id(i as u64)
+});
+syscall_one!(Sysinfo => (99) {
+    i if i >= 0 => SyscallRet::Success
+});
 
 macro_rules! syscall_two {
     ( $name:ident => ($val:tt) { $( $call_pat:pat => $call_expr:expr ),* },
