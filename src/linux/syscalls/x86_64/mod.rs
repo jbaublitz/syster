@@ -7,240 +7,153 @@ pub use self::sys1::*;
 mod sys2;
 pub use self::sys2::*;
 
-pub enum SyscallArg<'a> {
-    Int(i64),
-    Fd(u64),
-    Id(u64),
-    Ptr(&'a [u8]),
-    StrPtr(&'a str),
-    MutPtr(&'a mut [u8]),
+use core::slice;
+
+/// Trait for conversion between unsafe assembly input and output and Rust representations
+pub trait Arg: Into<u64> {
+    type Size;
+
+    fn from_i64(i64, Self::Size) -> Ret<Self>;
 }
 
-impl<'a> Into<u64> for SyscallArg<'a> {
+/// Indicates no return value
+pub struct NoRet;
+
+impl Into<u64> for NoRet {
     fn into(self) -> u64 {
-        match self {
-            SyscallArg::Int(i) => i as u64,
-            SyscallArg::Fd(f) => f,
-            SyscallArg::Id(i) => i,
-            SyscallArg::Ptr(p) => p.as_ptr() as u64,
-            SyscallArg::StrPtr(p) => p.as_ptr() as u64,
-            SyscallArg::MutPtr(mp) => mp.as_mut_ptr() as u64,
+        unimplemented!()
+    }
+}
+
+impl Arg for NoRet {
+    type Size = ();
+
+    fn from_i64(v: i64, _s: Self::Size) -> Ret<Self> {
+        match v {
+            i if i < 0 => Ret::Error(i),
+            _ => unimplemented!("Should never return without an error code"),
         }
     }
 }
 
-#[derive(Debug,PartialEq)]
-pub enum SyscallRet {
-    Ret(i64),
-    Fd(u64),
-    Id(u64),
-    Ptr(*const [u8]),
-    MutPtr(*mut [u8]),
-    Success,
-    Zero,
-    Err(i64),
+/// Indicates a zero return value on success exclusively
+pub struct Zero;
+
+impl Into<u64> for Zero {
+    fn into(self) -> u64 {
+        0
+    }
 }
 
-macro_rules! syscall_zero {
-    ( $name:ident => ($val:tt) {
-        $( $call_pat:pat if $call_expr_in:expr => $call_expr_out:expr ),*
-    } ) => (
-        pub struct $name;
+impl Arg for Zero {
+    type Size = ();
 
-        impl SyscallZeroArgs for $name {
-            fn numval() -> u64 {
-                $val
-            }
-
-            fn call() -> SyscallRet {
-                match $name::raw_call() {
-                    $( $call_pat if $call_expr_in => $call_expr_out, )*
-                    i if i < 0 => SyscallRet::Err(i),
-                    _ => unimplemented!(),
-                }
-            }
+    fn from_i64(v: i64, _s: Self::Size) -> Ret<Self> {
+        match v {
+            i if i == 0 => Ret::Success(Zero),
+            i if i < 0 => Ret::Error(i),
+            _ => unimplemented!("Unexpected syscall return value: should be < 1"),
         }
-    );
+    }
 }
 
-syscall_zero!(SchedYield => (24) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_zero!(Pause => (34) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_zero!(Getpid => (39) {
-    i if i > 0 => SyscallRet::Id(i as u64)
-});
-syscall_zero!(Fork => (57) {
-    i if i > 0 => SyscallRet::Id(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_zero!(Vfork => (58) {
-    i if i > 0 => SyscallRet::Id(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_zero!(Getuid => (102) {
-    i if i > 0 => SyscallRet::Id(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_zero!(Getgid => (104) {
-    i if i > 0 => SyscallRet::Id(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_zero!(Geteuid => (107) {
-    i if i > 0 => SyscallRet::Id(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_zero!(Getegid => (108) {
-    i if i > 0 => SyscallRet::Id(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_zero!(Getppid => (110) {
-    i if i > 0 => SyscallRet::Id(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_zero!(Getpgrp => (111) {
-    i if i > 0 => SyscallRet::Id(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_zero!(Setsid => (112) {
-    i if i > 0 => SyscallRet::Id(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_zero!(Munlockall => (152) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_zero!(Vhangup => (153) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_zero!(Sync => (162) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_zero!(Gettid => (186) {
-    i if i >= 0 => SyscallRet::Id(i as u64)
-});
-syscall_zero!(RestartSyscall => (219) {
-    i if i >= 0 => SyscallRet::Ret(i)
-});
-syscall_zero!(InotifyInit => (253) {
-    i if i >= 0 => SyscallRet::Fd(i as u64)
-});
+/// Indicates an int return value such as in the case of the `read` syscall
+pub struct Int(i64);
 
-macro_rules! syscall_one {
-    ( $name:ident => ($val:tt) {
-        $( $call_pat:pat if $call_expr_in:expr => $call_expr_out:expr ),*
-    } ) => (
-        pub struct $name;
+impl Arg for Int {
+    type Size = ();
 
-        impl SyscallOneArg for $name {
-            fn numval() -> u64 {
-                $val
-            }
-
-            fn call(arg0: SyscallArg) -> SyscallRet {
-                match $name::raw_call(arg0) {
-                    $( $call_pat if $call_expr_in => $call_expr_out, )*
-                    i if i < 0 => SyscallRet::Err(i),
-                    _ => unimplemented!(),
-                }
-            }
+    fn from_i64(v: i64, _s: Self::Size) -> Ret<Self> {
+        match v {
+            i if i >= 0 => Ret::Success(Int(i)),
+            i if i < 0 => Ret::Error(i),
+            _ => unimplemented!("Unreachable"),
         }
-    );
+    }
 }
 
-syscall_one!(Close => (3) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_one!(Brk => (12) {
-    i if i == 0 => SyscallRet::Success
-});
-//RtSigreturn => (15, Sys
-syscall_one!(Pipe => (22) {
-    i if i > 0 => SyscallRet::Fd(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_one!(Dup => (32) {
-    i if i > 0 => SyscallRet::Fd(i as u64),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_one!(Alarm => (37) {
-    i if i > 0 => SyscallRet::Ret(i),
-    i if i == 0 => SyscallRet::Zero
-});
-syscall_one!(Exit => (60) {});
-syscall_one!(Uname => (63) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_one!(Shmdt => (67) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_one!(Fsync => (74) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_one!(Fdatasync => (75) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_one!(Chdir => (80) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_one!(Fchdir => (81) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_one!(Rmdir => (84) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_one!(Unlink => (87) {
-    i if i == 0 => SyscallRet::Success
-});
-syscall_one!(Umask => (95) {
-    i if i >= 0 => SyscallRet::Id(i as u64)
-});
-syscall_one!(Sysinfo => (99) {
-    i if i >= 0 => SyscallRet::Success
-});
+impl Into<u64> for Int {
+    fn into(self) -> u64 {
+        self.0 as u64
+    }
+}
 
-macro_rules! syscall_two {
-    ( $name:ident => ($val:tt) { $( $call_pat:pat => $call_expr:expr ),* },
-      { $( $call_pat:pat => $call_expr:expr ),* } ) => (
-        pub struct $name;
+/// Indicates a numeric identifier that maps to a kernel resource
+pub struct Id(u64);
 
-        impl SyscallTwoArgs for $name {
-            fn numval() -> u64 {
-                $val
-            }
+impl Arg for Id {
+    type Size = ();
 
-            fn call(arg0: SyscallArg, arg1: SyscallTwoArgs) -> SyscallRet {
-                match (arg0, arg1) {
-                    $( $call_pat => $call_expr, )*
-                }
-            }
+    fn from_i64(v: i64, _s: Self::Size) -> Ret<Self> {
+        match v {
+            i if i >= 0 => Ret::Success(Id(i as u64)),
+            i if i < 0 => Ret::Error(i),
+            _ => unimplemented!("Unreachable"),
         }
-    );
+    }
+}
+
+impl Into<u64> for Id {
+    fn into(self) -> u64 {
+        self.0
+    }
+}
+
+/// Indicates a numeric identifier that maps to a kernel file descriptor
+pub struct Fd(u64);
+
+impl Arg for Fd {
+    type Size = ();
+
+    fn from_i64(v: i64, _s: Self::Size) -> Ret<Self> {
+        match v {
+            i if i >= 0 => Ret::Success(Fd(i as u64)),
+            i if i < 0 => Ret::Error(i),
+            _ => unimplemented!("Unreachable"),
+        }
+    }
+}
+
+impl Into<u64> for Fd {
+    fn into(self) -> u64 {
+        self.0
+    }
+}
+
+/// Represents a pointer to memory
+pub struct Ptr<'a>(&'a [u8]);
+
+impl<'a> Arg for Ptr<'a> {
+    type Size = usize;
+
+    fn from_i64(v: i64, s: Self::Size) -> Ret<Self> {
+        match v {
+            i if i >= 0 => Ret::Success(Ptr(unsafe { slice::from_raw_parts(i as *const _, s) })),
+            i if i < 0 => Ret::Error(i),
+            _ => unimplemented!("Unreachable"),
+        }
+    }
+}
+
+impl<'a> Into<u64> for Ptr<'a> {
+    fn into(self) -> u64 {
+        self.0.as_ptr() as u64
+    }
+}
+
+/// The top level return type for intepreting syscall integer return values
+pub enum Ret<T> {
+    Success(T),
+    Error(i64),
+}
+
+impl<T: Arg> From<(i64, T::Size)> for Ret<T> {
+    fn from(v: (i64, T::Size)) -> Self {
+        let (i, size) = v;
+        T::from_i64(i, size)
+    }
 }
 
 #[cfg(test)]
 mod test {
-    extern crate libc;
-    use super::*;
-
-    #[test]
-    fn test_asm_no_params() {
-        let pid = Getpid::call();
-        let libc_pid = unsafe { libc::getpid() };
-        assert_eq!(pid, SyscallRet::Id(libc_pid as u64));
-
-        let gid = Getgid::call();
-        let libc_gid = unsafe { libc::getgid() };
-        assert_eq!(gid, SyscallRet::Id(libc_gid as u64));
-    }
-
-    #[test]
-    fn test_asm_one_param() {
-        assert_eq!(match Fork::call() {
-            SyscallRet::Zero => Exit::call(SyscallArg::Id(0)),
-            SyscallRet::Id(_) => SyscallRet::Success,
-            _ => panic!(),
-        }, SyscallRet::Success)
-    }
 }

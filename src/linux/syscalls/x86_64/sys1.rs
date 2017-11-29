@@ -1,14 +1,27 @@
-use linux::syscalls::x86_64::{SyscallArg,SyscallRet};
+use super::*;
 
-pub trait SyscallOneArg {
-    fn raw_call<T: Into<u64>>(arg0: T) -> i64 {
+macro_rules! syscall1 {
+    ( $name:ident ( $num:tt ) [ $( $impl_clause:tt )* ] [ $( $fn:tt )* ] ) => (
+        pub struct $name;
+
+        $( $impl_clause )* for $name {
+            fn numval() -> u64 {
+                $num
+            }
+
+            $( $fn )*
+        }
+    );
+}
+
+pub trait SyscallOneArg<A: Arg, R: Arg> {
+    fn asm(arg0: u64) -> i64 {
         let val: u64 = Self::numval();
-        let intoarg0: u64 = arg0.into();
         let rval: i64;
         unsafe {
             asm!("syscall"
                  :"=A"(rval)
-                 :"{rax}"(val),"{rdi}"(intoarg0)
+                 :"{rax}"(val),"{rdi}"(arg0)
                  :"rax","rdi"
                  :"volatile"
              )
@@ -17,5 +30,16 @@ pub trait SyscallOneArg {
     }
 
     fn numval() -> u64;
-    fn call(SyscallArg) -> SyscallRet;
+    fn call(A) -> Ret<R>;
 }
+
+syscall1!(Close (3) [impl SyscallOneArg<Fd, Zero>] [
+          fn call(f: Fd) -> Ret<Zero> {
+              let v0: u64 = f.into();
+              Zero::from_i64(Self::asm(v0), ())
+          }]);
+syscall1!(Brk (12) [impl<'a> SyscallOneArg<Ptr<'a>, Zero>] [
+          fn call(f: Ptr) -> Ret<Zero> {
+              let v0: u64 = f.into();
+              Zero::from_i64(Self::asm(v0), ())
+          }]);
