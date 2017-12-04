@@ -1,3 +1,4 @@
+use super::super::super::int_width;
 use super::*;
 
 macro_rules! syscall1 {
@@ -41,5 +42,12 @@ syscall1!(Close (3) [impl SyscallOneArg<Fd, Zero>] [
 syscall1!(Brk (12) [impl<'a> SyscallOneArg<Ptr<'a>, Zero>] [
           fn call(f: Ptr) -> Ret<Zero> {
               let v0: u64 = f.into();
+              Zero::from_i64(Self::asm(v0), ())
+          }]);
+// No sigreturn implementation
+syscall1!(Pipe (22) [impl<'a> SyscallOneArg<Ptr<'a>, Zero>] [
+          fn call(b: Ptr) -> Ret<Zero> {
+              assert_eq!(b.buflen(), 2 * unsafe { int_width } as usize);
+              let v0: u64 = b.into();
               Zero::from_i64(Self::asm(v0), ())
           }]);

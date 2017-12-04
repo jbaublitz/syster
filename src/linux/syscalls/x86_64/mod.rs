@@ -123,6 +123,12 @@ impl Into<u64> for Fd {
 /// Represents a pointer to memory
 pub struct Ptr<'a>(&'a [u8]);
 
+impl<'a> Ptr<'a> {
+    pub fn buflen(&self) -> usize {
+        self.0.len()
+    }
+}
+
 impl<'a> Arg for Ptr<'a> {
     type Size = usize;
 
@@ -136,6 +142,26 @@ impl<'a> Arg for Ptr<'a> {
 }
 
 impl<'a> Into<u64> for Ptr<'a> {
+    fn into(self) -> u64 {
+        self.0.as_ptr() as u64
+    }
+}
+
+pub struct MutPtr<'a>(&'a mut [u8]);
+
+impl<'a> Arg for MutPtr<'a> {
+    type Size = usize;
+
+    fn from_i64(v: i64, s: Self::Size) -> Ret<Self> {
+        match v {
+            i if i >= 0 => Ret::Success(MutPtr(unsafe { slice::from_raw_parts_mut(i as *mut _, s) })),
+            i if i < 0 => Ret::Error(i),
+            _ => unimplemented!("Unreachable"),
+        }
+    }
+}
+
+impl<'a> Into<u64> for MutPtr<'a> {
     fn into(self) -> u64 {
         self.0.as_ptr() as u64
     }
