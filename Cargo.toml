@@ -3,8 +3,5 @@ name = "syster"
 version = "0.1.0"
 authors = ["John Baublitz <john.m.baublitz@gmail.com>"]
 
-[target.x86_64-unknown-linux-gnu.build-dependencies]
-cc = "*"
-
 [dev-dependencies]
 libc = "*"

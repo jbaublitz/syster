@@ -1,5 +1,5 @@
-use super::super::super::int_width;
 use super::*;
+use core::mem::size_of;
 
 macro_rules! syscall1 {
     ( $name:ident ( $num:tt ) [ $( $impl_clause:tt )* ] [ $( $fn:tt )* ] ) => (
@@ -47,7 +47,9 @@ syscall1!(Brk (12) [impl<'a> SyscallOneArg<Ptr<'a>, Zero>] [
 // No sigreturn implementation
 syscall1!(Pipe (22) [impl<'a> SyscallOneArg<Ptr<'a>, Zero>] [
           fn call(b: Ptr) -> Ret<Zero> {
-              assert_eq!(b.buflen(), 2 * unsafe { int_width } as usize);
+              if b.buflen() != size_of::<u32>() * 2 {
+                  return Ret::Error(22);
+              }
               let v0: u64 = b.into();
               Zero::from_i64(Self::asm(v0), ())
           }]);
