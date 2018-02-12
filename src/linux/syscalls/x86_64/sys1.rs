@@ -1,55 +1,37 @@
-use super::*;
-use core::mem::size_of;
+macro_rules! one {
+    ( $syscall:ident, $num:tt, $arg0ty: ty, $ty:ty ) => {
+        pub struct $syscall;
 
-macro_rules! syscall1 {
-    ( $name:ident ( $num:tt ) [ $( $impl_clause:tt )* ] [ $( $fn:tt )* ] ) => (
-        pub struct $name;
-
-        $( $impl_clause )* for $name {
-            fn numval() -> u64 {
+        impl Syscall for $syscall {
+            #[inline]
+            fn num() -> SyscallVal {
                 $num
             }
-
-            $( $fn )*
         }
-    );
+
+        impl OneArg for $syscall {
+            type Arg0 = $arg0ty;
+            type Return = $ty;
+        }
+    }
 }
 
-pub trait SyscallOneArg<A: Arg, R: Arg> {
-    fn asm(arg0: u64) -> i64 {
-        let val: u64 = Self::numval();
+pub trait OneArg: Syscall + Sized {
+    type Arg0: Into<u64>;
+    type Return: From<i64>;
+
+    fn call(self, arg0: Self::Arg0) -> Self::Return {
+        let val: u64 = Self::num();
+        let arg0i64 = arg0.into();
         let rval: i64;
         unsafe {
             asm!("syscall"
                  :"=A"(rval)
-                 :"{rax}"(val),"{rdi}"(arg0)
-                 :"rax","rdi"
+                 :"{rax}"(val), "{rdi}"(arg0)
+                 :"rax"
                  :"volatile"
              )
         };
-        rval
+        Self::Return::from(rval)
     }
-
-    fn numval() -> u64;
-    fn call(A) -> Ret<R>;
 }
-
-syscall1!(Close (3) [impl SyscallOneArg<Fd, Zero>] [
-          fn call(f: Fd) -> Ret<Zero> {
-              let v0: u64 = f.into();
-              Zero::from_i64(Self::asm(v0), ())
-          }]);
-syscall1!(Brk (12) [impl<'a> SyscallOneArg<Ptr<'a>, Zero>] [
-          fn call(f: Ptr) -> Ret<Zero> {
-              let v0: u64 = f.into();
-              Zero::from_i64(Self::asm(v0), ())
-          }]);
-// No sigreturn implementation
-syscall1!(Pipe (22) [impl<'a> SyscallOneArg<Ptr<'a>, Zero>] [
-          fn call(b: Ptr) -> Ret<Zero> {
-              if b.buflen() != size_of::<u32>() * 2 {
-                  return Ret::Error(22);
-              }
-              let v0: u64 = b.into();
-              Zero::from_i64(Self::asm(v0), ())
-          }]);
