@@ -1,3 +1,5 @@
+use super::*;
+
 macro_rules! one {
     ( $syscall:ident, $num:tt, $arg0ty: ty, $ty:ty ) => {
         pub struct $syscall;
@@ -27,7 +29,7 @@ pub trait OneArg: Syscall + Sized {
         unsafe {
             asm!("syscall"
                  :"=A"(rval)
-                 :"{rax}"(val), "{rdi}"(arg0)
+                 :"{rax}"(val), "{rdi}"(arg0i64)
                  :"rax"
                  :"volatile"
              )
@@ -35,3 +37,14 @@ pub trait OneArg: Syscall + Sized {
         Self::Return::from(rval)
     }
 }
+
+one!(Close, 3, Fd, Zero);
+one!(Brk, 12, Ptr, Zero);
+one!(Pipe, 22, Ptr, Zero);
+one!(Dup, 32, Fd, Fd);
+one!(Alarm, 37, Int, Int);
+one!(Exit, 60, Int, Never);
+one!(Uname, 63, MutPtr, Zero);
+one!(Shmdt, 67, Ptr, Zero);
+one!(Fsync, 74, Fd, Zero);
+one!(Fdatasync, 75, Fd, Zero);

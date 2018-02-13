@@ -9,12 +9,12 @@ pub trait Syscall {
 
 pub enum Zero {
     Success,
-    Err(i64),
+    Err(SyscallRet),
     InvalidData,
 }
 
-impl From<i64> for Zero {
-    fn from(v: i64) -> Self {
+impl From<SyscallRet> for Zero {
+    fn from(v: SyscallRet) -> Self {
         match v {
             i if i == 0 => Zero::Success,
             i if i > 0 => Zero::Err(i),
@@ -23,34 +23,78 @@ impl From<i64> for Zero {
     }
 }
 
-pub struct Error(i64);
+pub struct Error(SyscallRet);
 
-impl From<i64> for Error {
-    fn from(v: i64) -> Self {
+impl From<SyscallRet> for Error {
+    fn from(v: SyscallRet) -> Self {
         Error(v)
     }
 }
 
-pub struct Pid(i64);
+pub struct Pid(SyscallArg);
 
-impl From<i64> for Pid {
-    fn from(v: i64) -> Self {
-        Pid(v)
+impl From<SyscallRet> for Pid {
+    fn from(v: SyscallRet) -> Self {
+        Pid(v as SyscallArg)
     }
 }
 
-pub struct Id(i64);
+pub struct Id(SyscallArg);
 
-impl From<i64> for Id {
-    fn from(v: i64) -> Self {
-        Id(v)
+impl From<SyscallRet> for Id {
+    fn from(v: SyscallRet) -> Self {
+        Id(v as SyscallArg)
     }
 }
 
-pub struct Fd(i64);
+pub struct Fd(SyscallArg);
 
-impl From<i64> for Fd {
-    fn from(v: i64) -> Self {
-        Fd(v)
+impl Into<SyscallArg> for Fd {
+    fn into(self) -> SyscallArg {
+        self.0
+    }
+}
+
+impl From<SyscallRet> for Fd {
+    fn from(v: SyscallRet) -> Self {
+        Fd(v as SyscallArg)
+    }
+}
+
+pub struct Ptr(*const u8);
+
+impl Into<SyscallArg> for Ptr {
+    fn into(self) -> SyscallArg {
+        self.0 as SyscallArg
+    }
+}
+
+pub struct MutPtr(*mut u8);
+
+impl Into<SyscallArg> for MutPtr {
+    fn into(self) -> SyscallArg {
+        self.0 as SyscallArg
+    }
+}
+
+pub struct Int(SyscallArg);
+
+impl Into<SyscallArg> for Int {
+    fn into(self) -> SyscallArg {
+        self.0
+    }
+}
+
+impl From<SyscallRet> for Int {
+    fn from(v: SyscallRet) -> Self {
+        Int(v as SyscallArg)
+    }
+}
+
+pub struct Never;
+
+impl From<SyscallRet> for Never {
+    fn from(_v: SyscallRet) -> Self {
+        panic!("This function should never return")
     }
 }
